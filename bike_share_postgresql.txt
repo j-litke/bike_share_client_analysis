@@ -1,0 +1,128 @@
+-- Create table
+create table trip_data (
+    trip_id primary key not null,
+    start_time timestamp without time zone,
+    end_time date,
+    bike_id integer,
+    trip_duration_secs character varying(50),
+    from_station_id integer,
+    from_station_name character varying(100),
+    to_station_id integer,
+    to_station_name character varying(100),
+    user_type character varying(50),
+    user_gender character varying(50),
+    user_birth_year integer  NULL
+);
+
+-- trip_duration_secs could not be cast as integer, so it must be cleaned first
+-- Overview of trip_duration_secs
+select trip_duration_secs
+from trip_data
+order by trip_duration_secs desc
+limit 500
+
+-- The problem seems to be the number formating (eg. 1,000.0 instead of 1.000,0)
+update trip_data
+set trip_duration_secs = replace(trip_duration_secs, '.0', '')
+
+-- We will also need to remove the separating comma ','for the thousands and millions
+update trip_data
+set trip_duration_secs = replace(trip_duration_secs, ',', '')
+
+-- Cast trip_duration_secs as integer
+alter table trip_data
+alter column trip_duration_secs type integer
+USING trip_duration_secs::integer
+
+-- Overview of the data
+select * from trip_data
+limit 10
+
+--It appears that some columns have null values. Specifically in user_gender and user_birth_year
+select count(*) as gender_nulls
+from trip_data
+where user_gender is null
+
+select count(*) as birth_year_nulls
+from trip_data
+where user_birth_year is null
+
+-- They are similar numbers, so what is the overlap?
+select count(*) as null_overlap
+from trip_data
+where user_gender is null and user_birth_year is null
+
+-- A few calculations on this matter
+select 
+	gender_null_percent
+	,birth_year_null_percent
+	,100*birth_year_nulls/gender_nulls as overlap
+from
+	(select
+		(select count(*) 
+		from trip_data
+		where user_gender is null)*1.0 as gender_nulls
+		,(select count(*) 
+		from trip_data
+		where user_birth_year is null)*1.0 as birth_year_nulls
+		,100*(select count(*) as gender_nulls
+		from trip_data
+		where user_gender is null)*1.0/count(*) as gender_null_percent
+		,100*(select count(*) as birth_year_nulls
+		from trip_data
+		where user_birth_year is null)*1.0/count(*) as birth_year_null_percent
+	from trip_data) x
+
+-- Analyzing user_birth_year
+select min(user_birth_year), max(user_birth_year)
+from trip_data
+
+-- Check for duplicates using trip_id
+select 
+	count(*) as all_rows
+	,count(distinct trip_id) as disctinct_rows
+from trip_data
+
+-- Count number of stations
+select count(distinct from_station_id) as from_station_count, count(distinct to_station_id) as to_station_count
+from trip_data
+
+
+
+-- Count number of bikes
+select count(distinct bike_id)
+from trip_data
+
+-- See what the most used departing stations are 
+select distinct from_station_name, count(from_Station_name) as use_count
+from trip_data
+group by from_station_name
+order by use_count desc
+limit 5
+
+-- See what the most used arriving stations are 
+select distinct to_station_name, count(to_Station_name) as cnt
+from trip_data
+group by to_station_name
+order by cnt desc
+limit 10
+
+-- Calculate the average trip length [min]
+select avg(trip_duration_secs)/60 as avg_trip_length
+from trip_data
+
+-- Calculate the average trip length [min] for trips not longer than 4hs
+select avg(trip_duration_secs)/60 as avg_trip_length
+from trip_data
+where trip_duration_secs < 4*60*60
+
+-- Calculate the average trip length [days] for trips longer than 4hs
+select avg(trip_duration_secs/60/60/24) as avg_trip_length
+from trip_data
+where trip_duration_secs > 4*60*60
+
+
+
+
+
+
